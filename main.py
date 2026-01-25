@@ -1,7 +1,7 @@
 import cv2
 from ultralytics import YOLO
+import utils
 
-yolo_model = 'yolo26n.pt'
 classes = {
     0: "person",
     1: "bicycle",
@@ -15,14 +15,12 @@ classes = {
 
 classes_id = [ key for key, value in classes.items() ]
 
-
-model = YOLO(yolo_model)
-model.task = 'detect'
-model.conf = 0.3
-cap = cv2.VideoCapture('videos/prueba.mp4')
+model = utils.get_model()
+cap = cv2.VideoCapture('videos/salida_720p.mp4')
 
 while cap.isOpened():
     ret, frame = cap.read()
+    frame = utils.resize_frame(frame)
     if not ret:
         break
 
@@ -45,3 +43,4 @@ while cap.isOpened():
 
 cap.release()
 cv2.destroyAllWindows()
+
