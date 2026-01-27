@@ -13,24 +13,38 @@ classes = {
     3: "motorcycle",
     5: "bus",
     7: "truck",
-    9: "traffic light",
-    11: "stop sign"    
 }
 
 classes_id = [key for key in classes.keys()]
 
 # ---------------------------
-# ROI (zona de interés)
-# Ajusta estos puntos a tu video
+# Configuración de ROIs
 # ---------------------------
-roi_points = [
-    (0, 0),
-    (500, 0),
-    (500, 500),
-    (0, 500),
+# Definimos dos zonas con colores distintos
+rois = [
+    {
+        "name": "Zona A (Arriba-Izq)",
+        "points": np.array([
+            (0, 0),
+            (600, 0),
+            (600, 600),
+            (0, 600)
+        ], np.int32),
+        "color": (0, 0, 255), # Rojo
+        "counts": {}
+    },
+    {
+        "name": "Zona B (Abajo-Der)",
+        "points": np.array([
+            (680, 360),
+            (1280, 360),
+            (1280, 720),
+            (680, 720)
+        ], np.int32),
+        "color": (255, 0, 0), # Azul
+        "counts": {}
+    }
 ]
-
-roi_pts = np.array(roi_points, np.int32).reshape((-1, 1, 2))
 
 # ---------------------------
 # Modelo y video
@@ -45,44 +59,75 @@ while cap.isOpened():
 
     frame = utils.resize_frame(frame)
 
-    # Dibujar ROI
-    cv2.polylines(frame, [roi_pts], isClosed=True, color=(0, 0, 255), thickness=2)
+    # Reiniciar contadores para este frame
+    for roi in rois:
+        roi["counts"] = {name: 0 for name in classes.values()}
 
     # Inferencia YOLO
-    results = model(frame, stream=True, classes=classes_id)
+    results = model(frame, stream=True, classes=classes_id, verbose=False)
 
     for result in results:
         for box in result.boxes:
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             conf = float(box.conf[0])
             cls = int(box.cls[0])
-            label = model.names[cls]
+            label = classes.get(cls, model.names[cls])
 
             # Centro del bounding box
             cx = (x1 + x2) // 2
             cy = (y1 + y2) // 2
 
-            # ¿Está dentro del ROI?
-            inside = cv2.pointPolygonTest(roi_pts, (cx, cy), False)
+            # Verificar en qué ROI está
+            for roi in rois:
+                inside = cv2.pointPolygonTest(roi["points"], (cx, cy), False)
+                if inside >= 0:
+                    roi["counts"][label] += 1
+                    
+                    # Dibujar bounding box del color de la ROI
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    cv2.circle(frame, (cx, cy), 5, roi["color"], -1)
+                    cv2.putText(
+                        frame,
+                        f'{label} {conf:.2f}',
+                        (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.6,
+                        (0, 255, 0),
+                        2
+                    )
 
-            if inside < 0:
-                continue  # Ignorar objetos fuera del ROI
+    # ---------------------------
+    # Visualización
+    # ---------------------------
+    overlay = frame.copy()
+    
+    # Dibujar Polígonos y Panel de Estadísticas
+    ui_y_offset = 30
+    
+    for roi in rois:
+        # Dibujar polígono
+        cv2.polylines(frame, [roi["points"]], isClosed=True, color=roi["color"], thickness=2)
+        
+        # Dibujar fondo semitransparente para stats
+        cv2.rectangle(overlay, (10, ui_y_offset - 25), (300, ui_y_offset + 120), (0, 0, 0), -1)
+        
+        # Título de la zona
+        cv2.putText(frame, f"{roi['name']}:", (20, ui_y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.7, roi["color"], 2)
+        ui_y_offset += 25
+        
+        # Contadores por tipo
+        for cls_name, count in roi["counts"].items():
+            if count > 0:
+                text = f"  {cls_name.capitalize()}: {count}"
+                cv2.putText(frame, text, (20, ui_y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+                ui_y_offset += 25
+        
+        ui_y_offset += 10 # Espacio extra entre zonas
 
-            # Dibujar detección válida
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.circle(frame, (cx, cy), 5, (255, 0, 0), -1)
+    # Aplicar transparencia al panel
+    frame = cv2.addWeighted(overlay, 0.4, frame, 0.6, 0)
 
-            cv2.putText(
-                frame,
-                f'{label} {conf:.2f}',
-                (x1, y1 - 10),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.8,
-                (0, 255, 0),
-                2
-            )
-
-    cv2.imshow("YOLO Video", frame)
+    cv2.imshow("Multi-Zone Vehicle Counter", frame)
 
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
