@@ -2,6 +2,8 @@ import cv2
 from ultralytics import YOLO
 import numpy as np
 import utils
+from services.exporter import ConsoleExportService
+from services.reporter import ReportManager
 
 # ---------------------------
 # Clases de interés
@@ -51,11 +53,23 @@ rois = [
 # ---------------------------
 model = utils.get_model()
 cap = cv2.VideoCapture('videos/salida_720p.mp4')
+fps = cap.get(cv2.CAP_PROP_FPS)
+
+# ---------------------------
+# Servicios de Reporte
+# ---------------------------
+exporter = ConsoleExportService()
+reporter = ReportManager(exporter, interval_seconds=5.0)
+
+current_video_time = 0.0
 
 while cap.isOpened():
     ret, frame = cap.read()
     if not ret:
         break
+    
+    # Calcular tiempo actual del video
+    current_video_time = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
 
     frame = utils.resize_frame(frame)
 
@@ -95,6 +109,17 @@ while cap.isOpened():
                         (0, 255, 0),
                         2
                     )
+
+    # ---------------------------
+    # Reporte Dinámico
+    # ---------------------------
+    # Preparamos los datos para el reporte
+    report_data = {
+        "timestamp": current_video_time,
+        "rois": {roi["name"]: roi["counts"].copy() for roi in rois}
+    }
+    reporter.update(current_video_time, report_data)
+
 
     # ---------------------------
     # Visualización
