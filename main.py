@@ -27,10 +27,10 @@ rois = [
     {
         "name": "Zona A (Arriba-Izq)",
         "points": np.array([
-            (0, 0),
-            (600, 0),
-            (600, 600),
-            (0, 600)
+            (0, 320),
+            (600, 320),
+            (600, 720),
+            (0, 720)
         ], np.int32),
         "color": (0, 0, 255), # Rojo
         "counts": {}
@@ -52,7 +52,7 @@ rois = [
 # Modelo y video
 # ---------------------------
 model = utils.get_model()
-cap = cv2.VideoCapture('videos/salida_720p.mp4')
+cap = cv2.VideoCapture('videos/moiz3.mp4')
 fps = cap.get(cv2.CAP_PROP_FPS)
 
 # ---------------------------
