@@ -54,7 +54,7 @@ models = utils.get_models()
 dual_yolo = SequentialDualYOLO(
     model_accidents=models['accidents'],
     model_coco=models['coco'],
-    accident_confidence=0.5,
+    accident_confidence=0.2,
     object_confidence=0.4,
     correlation_distance=100.0
 )
@@ -62,8 +62,8 @@ dual_yolo = SequentialDualYOLO(
 # ---------------------------
 # Video Source
 # ---------------------------
-cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
-
+#cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+cap = cv2.VideoCapture('videos/moiz3.mp4')
 # ---------------------------
 # Servicios de Reporte
 # ---------------------------
@@ -100,8 +100,12 @@ while cap.isOpened():
     # Visualización de Detecciones
     # ---------------------------
     
-    # Dibujar objetos detectados
+    # Dibujar objetos detectados (solo los que están dentro de ROIs)
     for obj in results['objects']:
+        # Solo dibujar si el objeto está dentro de una ROI
+        if 'roi' not in obj:
+            continue
+            
         x1, y1, x2, y2 = obj['bbox']
         conf = obj['confidence']
         label = obj['class']
@@ -136,8 +140,12 @@ while cap.isOpened():
             2
         )
     
-    # Dibujar accidentes detectados
+    # Dibujar accidentes detectados (solo los que están dentro de ROIs)
     for accident in results['accidents']:
+        # Solo dibujar si el accidente está dentro de una ROI
+        if 'roi' not in accident:
+            continue
+            
         x1, y1, x2, y2 = accident['bbox']
         conf = accident['confidence']
         

@@ -19,7 +19,7 @@ def get_models():
             - 'accidents': YOLO model for accident detection
             - 'coco': YOLO model for object detection
     """
-    model_accidents = YOLO('models/yolov8s-100.pt')
+    model_accidents = YOLO('models/yolov8m-accidents.pt')
     model_coco = YOLO('models/yolov8n.pt')
     
     return {
