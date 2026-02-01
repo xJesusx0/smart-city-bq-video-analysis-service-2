@@ -74,6 +74,17 @@ cap = cv2.VideoCapture('videos/moiz3.mp4')
 exporter = ConsoleExportService()
 reporter = ReportManager(exporter, interval_seconds=5.0)
 
+# ---------------------------
+# Frame Skipping Configuration
+# ---------------------------
+# Procesar solo 1 de cada N frames para aumentar FPS
+# PROCESS_EVERY_N_FRAMES = 1: Sin skipping (procesa todos)
+# PROCESS_EVERY_N_FRAMES = 2: Procesa 1 de cada 2 (2x FPS)
+# PROCESS_EVERY_N_FRAMES = 3: Procesa 1 de cada 3 (3x FPS)
+PROCESS_EVERY_N_FRAMES = 2
+
+frame_count = 0
+last_results = None
 current_video_time = 0.0
 
 while cap.isOpened():
@@ -89,20 +100,46 @@ while cap.isOpened():
     # Actualizar coordenadas de ROIs según el tamaño del frame actual
     frame_height, frame_width = frame.shape[:2]
     utils.update_roi_pixels(rois, frame_width, frame_height)
-
-    # Reiniciar contadores para este frame
-    for roi in rois:
-        roi["counts"] = {name: 0 for name in coco_classes.values()}
-        roi["counts"]["accident"] = 0
-
-    # Inferencia Dual YOLO (Secuencial)
-    results = dual_yolo.process_frame(frame, rois=rois)
     
-    # Actualizar contadores de ROI desde los resultados
-    for roi in rois:
-        roi_name = roi["name"]
-        if roi_name in results['roi_stats']:
-            roi["counts"] = results['roi_stats'][roi_name]
+    frame_count += 1
+    
+    # ---------------------------
+    # Frame Skipping Logic
+    # ---------------------------
+    # Solo procesar inferencia cada N frames
+    should_process = (frame_count % PROCESS_EVERY_N_FRAMES == 0)
+    
+    if should_process:
+        # Reiniciar contadores para este frame
+        for roi in rois:
+            roi["counts"] = {name: 0 for name in coco_classes.values()}
+            roi["counts"]["accident"] = 0
+
+        # Inferencia Dual YOLO (Secuencial) - Solo en frames seleccionados
+        results = dual_yolo.process_frame(frame, rois=rois)
+        last_results = results  # Guardar para frames saltados
+        
+        # Actualizar contadores de ROI desde los resultados
+        for roi in rois:
+            roi_name = roi["name"]
+            if roi_name in results['roi_stats']:
+                roi["counts"] = results['roi_stats'][roi_name]
+    else:
+        # Frame saltado: reutilizar resultados anteriores
+        if last_results is not None:
+            results = last_results
+            # Actualizar contadores de ROI desde los resultados guardados
+            for roi in rois:
+                roi_name = roi["name"]
+                if roi_name in results['roi_stats']:
+                    roi["counts"] = results['roi_stats'][roi_name]
+        else:
+            # Primer frame, procesar de todas formas
+            for roi in rois:
+                roi["counts"] = {name: 0 for name in coco_classes.values()}
+                roi["counts"]["accident"] = 0
+            results = dual_yolo.process_frame(frame, rois=rois)
+            last_results = results
 
     # ---------------------------
     # Visualización de Detecciones
@@ -209,12 +246,24 @@ while cap.isOpened():
     ui_y_offset = 30
     
     # Panel de FPS y Performance
-    cv2.rectangle(overlay, (10, ui_y_offset - 25), (350, ui_y_offset + 50), (0, 0, 0), -1)
-    cv2.putText(frame, f"FPS: {results['fps_info']['fps']:.1f}", (20, ui_y_offset), 
+    cv2.rectangle(overlay, (10, ui_y_offset - 25), (400, ui_y_offset + 75), (0, 0, 0), -1)
+    
+    # Mostrar FPS efectivo (considerando frame skipping)
+    effective_fps = results['fps_info']['fps'] * PROCESS_EVERY_N_FRAMES if 'fps_info' in results else 0
+    cv2.putText(frame, f"FPS: {effective_fps:.1f}", (20, ui_y_offset), 
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
     ui_y_offset += 25
-    cv2.putText(frame, f"Latency: {results['fps_info']['total_time']*1000:.1f}ms", (20, ui_y_offset), 
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+    
+    # Mostrar latencia de inferencia
+    if 'fps_info' in results:
+        cv2.putText(frame, f"Latency: {results['fps_info']['total_time']*1000:.1f}ms", (20, ui_y_offset), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+    ui_y_offset += 25
+    
+    # Mostrar frame skipping info
+    skip_text = f"Skip: 1/{PROCESS_EVERY_N_FRAMES}" if PROCESS_EVERY_N_FRAMES > 1 else "Skip: OFF"
+    cv2.putText(frame, skip_text, (20, ui_y_offset), 
+                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 1)
     ui_y_offset += 25
     cv2.putText(frame, f"Accidents: {len(results['accidents'])}", (20, ui_y_offset), 
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
