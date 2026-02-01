@@ -14,6 +14,10 @@ import numpy as np
 from ultralytics import YOLO
 from typing import Dict, List, Tuple, Any
 import time
+import logging
+from ..config import config
+
+logger = logging.getLogger(__name__)
 
 
 class SequentialDualYOLO:
@@ -36,9 +40,9 @@ class SequentialDualYOLO:
         self,
         model_accidents: YOLO,
         model_coco: YOLO,
-        accident_confidence: float = 0.5,
-        object_confidence: float = 0.4,
-        correlation_distance: float = 100.0
+        accident_confidence: float = None,
+        object_confidence: float = None,
+        correlation_distance: float = None
     ):
         """
         Initialize the sequential dual-YOLO system.
@@ -52,9 +56,13 @@ class SequentialDualYOLO:
         """
         self.model_accidents = model_accidents
         self.model_coco = model_coco
-        self.accident_confidence = accident_confidence
-        self.object_confidence = object_confidence
-        self.correlation_distance = correlation_distance
+        
+        # Use config values if not provided
+        self.accident_confidence = accident_confidence or config.inference.get("accident_confidence", 0.5)
+        self.object_confidence = object_confidence or config.inference.get("object_confidence", 0.4)
+        self.correlation_distance = correlation_distance or config.inference.get("correlation_distance", 100.0)
+        
+        logger.info(f"Initialized SequentialDualYOLO with conf_acc={self.accident_confidence}, conf_obj={self.object_confidence}")
         
     def process_frame(self, frame: np.ndarray, rois: List[Dict] = None) -> Dict[str, Any]:
         """

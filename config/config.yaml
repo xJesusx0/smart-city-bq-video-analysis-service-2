@@ -1,0 +1,36 @@
+model:
+  accidents_path: "models/yolov8m-accidents.pt"
+  coco_path: "models/yolov8n.pt"
+
+inference:
+  accident_confidence: 0.2
+  object_confidence: 0.4
+  correlation_distance: 100.0
+
+video:
+  target_width: 640
+  fast_resize: true
+  process_every_n_frames: 2
+
+reporting:
+  interval_seconds: 5.0
+
+notifications:
+  cooldown_seconds: 10.0
+  min_confidence: 0.3
+
+rois:
+  - name: "Zona A (Arriba-Izq)"
+    color: [0, 0, 255] # BGR Red
+    percentage_points:
+      - [0.0, 0.44]
+      - [0.47, 0.44]
+      - [0.47, 1.0]
+      - [0.0, 1.0]
+  - name: "Zona B (Abajo-Der)"
+    color: [255, 0, 0] # BGR Blue
+    percentage_points:
+      - [0.53, 0.5]
+      - [1.0, 0.5]
+      - [1.0, 1.0]
+      - [0.53, 1.0]
