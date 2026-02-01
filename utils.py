@@ -11,5 +11,18 @@ def resize_frame(frame):
     return frame
 
 def get_models():
-    model = YOLO('models/best-versi-1.pt')
-    return model
+    """
+    Load both YOLO models for dual inference.
+    
+    Returns:
+        dict: Dictionary containing both models:
+            - 'accidents': YOLO model for accident detection
+            - 'coco': YOLO model for object detection
+    """
+    model_accidents = YOLO('models/yolov8s-100.pt')
+    model_coco = YOLO('models/yolov8n.pt')
+    
+    return {
+        'accidents': model_accidents,
+        'coco': model_coco
+    }
