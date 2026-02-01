@@ -4,17 +4,14 @@ import numpy as np
 import utils
 from services.exporter import ConsoleExportService
 from services.reporter import ReportManager
+from concurrent.futures import ThreadPoolExecutor
 
 # ---------------------------
 # Clases de interés
 # ---------------------------
+# Clases para modelo de accidentes
 classes = {
-    0: "person",
-    1: "bicycle",
-    2: "car",
-    3: "motorcycle",
-    5: "bus",
-    7: "truck",
+    0: "accident"
 }
 
 classes_id = [key for key in classes.keys()]
@@ -49,11 +46,14 @@ rois = [
 ]
 
 # ---------------------------
-# Modelo y video
+# Modelos y video
 # ---------------------------
-model = utils.get_model()
-cap = cv2.VideoCapture('videos/moiz3.mp4')
-fps = cap.get(cv2.CAP_PROP_FPS)
+model = utils.get_models()
+#cap = cv2.VideoCapture('videos/moiz3.mp4')
+#cap = cv2.VideoCapture(0)
+#fps = cap.get(cv2.CAP_PROP_FPS)
+
+cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
 
 # ---------------------------
 # Servicios de Reporte
@@ -78,7 +78,7 @@ while cap.isOpened():
         roi["counts"] = {name: 0 for name in classes.values()}
 
     # Inferencia YOLO
-    results = model(frame, stream=True, classes=classes_id, verbose=False)
+    results = model(frame, stream=True, classes=classes_id, verbose=True)
 
     for result in results:
         for box in result.boxes:

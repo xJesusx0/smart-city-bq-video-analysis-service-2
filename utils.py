@@ -10,10 +10,6 @@ def resize_frame(frame):
     frame = cv2.resize(frame, (target_width, target_height))
     return frame
 
-def get_model():
-    yolo_model = 'yolo26n.pt'
-
-    model = YOLO(yolo_model)
-    model.task = 'detect'
-    model.conf = 0.8
+def get_models():
+    model = YOLO('models/best-versi-1.pt')
     return model
