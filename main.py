@@ -19,32 +19,36 @@ coco_classes = {
 }
 
 # ---------------------------
-# Configuración de ROIs
+# Configuración de ROIs (Basadas en Porcentajes)
 # ---------------------------
-# Definimos dos zonas con colores distintos
+# Las ROIs ahora se definen con coordenadas porcentuales (0.0-1.0)
+# Esto las hace independientes de la resolución del video
+
+# Convertir coordenadas originales (1280x720) a porcentajes:
+# Zona A: (0, 320) → (0%, 44.4%), (600, 320) → (46.9%, 44.4%)
+# Zona B: (680, 360) → (53.1%, 50%), (1280, 360) → (100%, 50%)
+
 rois = [
-    {
-        "name": "Zona A (Arriba-Izq)",
-        "points": np.array([
-            (0, 320),
-            (600, 320),
-            (600, 720),
-            (0, 720)
-        ], np.int32),
-        "color": (0, 0, 255), # Rojo
-        "counts": {}
-    },
-    {
-        "name": "Zona B (Abajo-Der)",
-        "points": np.array([
-            (680, 360),
-            (1280, 360),
-            (1280, 720),
-            (680, 720)
-        ], np.int32),
-        "color": (255, 0, 0), # Azul
-        "counts": {}
-    }
+    utils.create_roi_from_percentage(
+        name="Zona A (Arriba-Izq)",
+        percentage_points=[
+            (0.0, 0.44),    # Top-left: 0%, 44%
+            (0.47, 0.44),   # Top-right: 47%, 44%
+            (0.47, 1.0),    # Bottom-right: 47%, 100%
+            (0.0, 1.0)      # Bottom-left: 0%, 100%
+        ],
+        color=(0, 0, 255)  # Rojo
+    ),
+    utils.create_roi_from_percentage(
+        name="Zona B (Abajo-Der)",
+        percentage_points=[
+            (0.53, 0.50),   # Top-left: 53%, 50%
+            (1.0, 0.50),    # Top-right: 100%, 50%
+            (1.0, 1.0),     # Bottom-right: 100%, 100%
+            (0.53, 1.0)     # Bottom-left: 53%, 100%
+        ],
+        color=(255, 0, 0)  # Azul
+    )
 ]
 
 # ---------------------------
@@ -81,6 +85,10 @@ while cap.isOpened():
     current_video_time = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
 
     frame = utils.resize_frame(frame)
+    
+    # Actualizar coordenadas de ROIs según el tamaño del frame actual
+    frame_height, frame_width = frame.shape[:2]
+    utils.update_roi_pixels(rois, frame_width, frame_height)
 
     # Reiniciar contadores para este frame
     for roi in rois:
