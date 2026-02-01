@@ -4,6 +4,7 @@ import numpy as np
 import utils
 from services.exporter import ConsoleExportService
 from services.reporter import ReportManager
+from services.notification import ConsoleNotificationService, AccidentNotifier
 from sequential_inference import SequentialDualYOLO
 
 # ---------------------------
@@ -73,6 +74,19 @@ cap = cv2.VideoCapture('videos/moiz3.mp4')
 # ---------------------------
 exporter = ConsoleExportService()
 reporter = ReportManager(exporter, interval_seconds=5.0)
+
+# ---------------------------
+# Sistema de Notificaciones
+# ---------------------------
+# Crear servicio de notificaciones (consola por ahora)
+notification_service = ConsoleNotificationService(verbose=True)
+
+# Crear notificador con debouncing (10 segundos de cooldown)
+accident_notifier = AccidentNotifier(
+    notification_service=notification_service,
+    cooldown_seconds=10.0,  # Esperar 10s antes de notificar el mismo accidente
+    min_confidence=0.3       # Solo notificar si confianza >= 30%
+)
 
 # ---------------------------
 # Frame Skipping Configuration
@@ -236,6 +250,16 @@ while cap.isOpened():
         "fps": results['fps_info']['fps']
     }
     reporter.update(current_video_time, report_data)
+    
+    # ---------------------------
+    # Sistema de Notificaciones
+    # ---------------------------
+    # Procesar accidentes y enviar notificaciones si es necesario
+    if should_process and results['accidents']:
+        notifications_sent = accident_notifier.process_accidents(
+            results['accidents'],
+            current_time=current_video_time
+        )
 
     # ---------------------------
     # Visualización de UI
