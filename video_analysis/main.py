@@ -69,7 +69,7 @@ def main():
     # For now we'll stick to a default or argument parsing could be added here
     # Example: video_source = config.video.get("source", 0)
     # Using the hardcoded path from original main.py for now as per user context
-    video_source = 'videos/moiz3.mp4' 
+    #video_source = 'videos/moiz3.mp4' 
     
     logger.info(f"Opening video source: {video_source}")
     cap = cv2.VideoCapture(video_source)
@@ -169,8 +169,10 @@ def main():
 def _draw_results(frame, results, rois):
     """Helper to draw detection results"""
     # Draw objects in ROIs
+    # Draw objects in ROIs or involved in accidents
     for obj in results['objects']:
-        if 'roi' not in obj: continue
+        # Show if in ROI OR involved in an accident
+        if 'roi' not in obj and not obj['involved_in_accident']: continue
         
         x1, y1, x2, y2 = obj['bbox']
         color = (0, 255, 255) if obj['involved_in_accident'] else (0, 255, 0)
@@ -187,7 +189,8 @@ def _draw_results(frame, results, rois):
 
     # Draw accidents
     for acc in results['accidents']:
-        if 'roi' not in acc: continue
+        # Show ALL accidents regardless of ROI
+        # if 'roi' not in acc: continue
         
         x1, y1, x2, y2 = acc['bbox']
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 4)
