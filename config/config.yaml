@@ -1,11 +1,11 @@
 model:
-  accidents_path: "models/yolov8m-accidents.pt"
+  accidents_path: "models/yolov8-accidents.pt"
   coco_path: "models/yolov8n.pt"
 
 inference:
-  accident_confidence: 0.2
+  accident_confidence: 0.89
   object_confidence: 0.4
-  correlation_distance: 100.0
+  correlation_distance: 50.0
 
 video:
   target_width: 640

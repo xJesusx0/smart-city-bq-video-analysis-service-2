@@ -55,6 +55,7 @@ class SequentialDualYOLO:
             correlation_distance: Maximum distance (pixels) to correlate objects with accidents
         """
         self.model_accidents = model_accidents
+        print(model_accidents.names)
         self.model_coco = model_coco
         
         # Use config values if not provided

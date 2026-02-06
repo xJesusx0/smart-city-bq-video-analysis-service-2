@@ -64,12 +64,12 @@ def main():
     # ---------------------------
     # Video Source Verification
     # ---------------------------
-    video_source = 0 # Default to webcam
+    #video_source = 0 # Default to webcam
     # You might want to add video source to config if it's not dynamic
     # For now we'll stick to a default or argument parsing could be added here
     # Example: video_source = config.video.get("source", 0)
     # Using the hardcoded path from original main.py for now as per user context
-    #video_source = 'videos/moiz3.mp4' 
+    video_source = 'videos/video1.mp4' 
     
     logger.info(f"Opening video source: {video_source}")
     cap = cv2.VideoCapture(video_source)
