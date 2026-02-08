@@ -9,6 +9,7 @@ from .core.inference import SequentialDualYOLO
 from .services.exporter import ConsoleExportService
 from .services.reporter import ReportManager
 from .services.notification import ConsoleNotificationService, AccidentNotifier
+from .services.api import start_api_server, update_roi_state
 from .utils import resize_frame, create_roi_from_percentage, update_roi_pixels, get_models
 
 # Setup logging
@@ -60,6 +61,11 @@ def main():
         cooldown_seconds=config.notifications.get("cooldown_seconds", 10.0),
         min_confidence=config.notifications.get("min_confidence", 0.3)
     )
+
+    # Start API server in background
+    api_port = config.api.get("port", 8000) if hasattr(config, 'api') else 8000
+    start_api_server(port=api_port)
+    logger.info(f"API server started on http://0.0.0.0:{api_port}")
 
     # ---------------------------
     # Video Source Verification
@@ -148,6 +154,9 @@ def main():
                 "fps": results['fps_info']['fps']
             }
             reporter.update(current_video_time, report_data)
+            
+            # Update API state
+            update_roi_state({r["name"]: r["counts"].copy() for r in rois})
 
             if should_process and results['accidents']:
                 accident_notifier.process_accidents(
