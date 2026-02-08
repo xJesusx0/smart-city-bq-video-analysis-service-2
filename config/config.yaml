@@ -1,11 +1,12 @@
 model:
-  accidents_path: "models/yolov8-accidents.pt"
+  accidents_path: "models/yolov8m-accidents.pt"
   coco_path: "models/yolov8n.pt"
 
 inference:
-  accident_confidence: 0.89
+  accident_confidence: 0.75
   object_confidence: 0.4
   correlation_distance: 50.0
+  temporal_threshold: 1 # Number of consecutive frames to confirm accident
 
 video:
   target_width: 640

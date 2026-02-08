@@ -20,6 +20,101 @@ from ..config import config
 logger = logging.getLogger(__name__)
 
 
+class AccidentTracker:
+    """
+    Tracks accident candidates over multiple frames to filter out false positives.
+    An accident is only confirmed if it persists for 'persistence_threshold' consecutive frames.
+    """
+    def __init__(self, persistence_threshold: int = 3, iou_threshold: float = 0.3):
+        self.persistence_threshold = persistence_threshold
+        self.iou_threshold = iou_threshold
+        # List of tracked accidents: {'bbox': [x1, y1, x2, y2], 'frames_seen': int, 'confirmed': bool, 'data': dict}
+        self.tracked_accidents = []
+
+    def update(self, current_detections: List[Dict]) -> List[Dict]:
+        """
+        Update tracked accidents with current frame detections.
+        
+        Args:
+            current_detections: List of accident dictionaries from current frame
+            
+        Returns:
+            List of CONFIRMED accident dictionaries to be reported
+        """
+        # Match current detections with tracked accidents using IoU
+        # Simple greedy matching
+        matched_indices = set()
+        updated_tracks = []
+
+        for track in self.tracked_accidents:
+            best_iou = 0
+            best_idx = -1
+            
+            for i, det in enumerate(current_detections):
+                if i in matched_indices:
+                    continue
+                
+                iou = self._calculate_iou(track['bbox'], det['bbox'])
+                if iou > self.iou_threshold and iou > best_iou:
+                    best_iou = iou
+                    best_idx = i
+            
+            if best_idx != -1:
+                # Match found, update track
+                matched_indices.add(best_idx)
+                det = current_detections[best_idx]
+                track['bbox'] = det['bbox']
+                track['data'] = det # Update with latest confidence/info
+                track['frames_seen'] += 1
+                updated_tracks.append(track)
+            else:
+                # Track lost - we could implement a "patience" logic here, 
+                # but for strict filtering we drop it if lost in one frame
+                # Or we can just drop it. Let's drop it for now to be strict.
+                pass
+        
+        # Add new detections as new tracks
+        for i, det in enumerate(current_detections):
+            if i not in matched_indices:
+                updated_tracks.append({
+                    'bbox': det['bbox'],
+                    'frames_seen': 1,
+                    'confirmed': False,
+                    'data': det
+                })
+        
+        self.tracked_accidents = updated_tracks
+        
+        # Collect confirmed accidents
+        confirmed_accidents = []
+        for track in self.tracked_accidents:
+            if track['frames_seen'] >= self.persistence_threshold:
+                track['confirmed'] = True
+                confirmed_accidents.append(track['data'])
+                
+        return confirmed_accidents
+
+    def _calculate_iou(self, box1, box2):
+        """Calculate Intersection over Union (IoU) between two bounding boxes."""
+        x1_1, y1_1, x2_1, y2_1 = box1
+        x1_2, y1_2, x2_2, y2_2 = box2
+        
+        x_left = max(x1_1, x1_2)
+        y_top = max(y1_1, y1_2)
+        x_right = min(x2_1, x2_2)
+        y_bottom = min(y2_1, y2_2)
+        
+        if x_right < x_left or y_bottom < y_top:
+            return 0.0
+            
+        intersection_area = (x_right - x_left) * (y_bottom - y_top)
+        
+        box1_area = (x2_1 - x1_1) * (y2_1 - y1_1)
+        box2_area = (x2_2 - x1_2) * (y2_2 - y1_2)
+        
+        return intersection_area / float(box1_area + box2_area - intersection_area)
+
+
 class SequentialDualYOLO:
     """
     Sequential dual-YOLO inference system for accident detection and object tracking.
@@ -55,7 +150,6 @@ class SequentialDualYOLO:
             correlation_distance: Maximum distance (pixels) to correlate objects with accidents
         """
         self.model_accidents = model_accidents
-        print(model_accidents.names)
         self.model_coco = model_coco
         
         # Use config values if not provided
@@ -63,7 +157,11 @@ class SequentialDualYOLO:
         self.object_confidence = object_confidence or config.inference.get("object_confidence", 0.4)
         self.correlation_distance = correlation_distance or config.inference.get("correlation_distance", 100.0)
         
-        logger.info(f"Initialized SequentialDualYOLO with conf_acc={self.accident_confidence}, conf_obj={self.object_confidence}")
+        # Initialize Accident Tracker
+        temporal_threshold = config.inference.get("temporal_threshold", 3)
+        self.tracker = AccidentTracker(persistence_threshold=temporal_threshold)
+        
+        logger.info(f"Initialized SequentialDualYOLO with conf_acc={self.accident_confidence}, conf_obj={self.object_confidence}, temporal_threshold={temporal_threshold}")
         
     def process_frame(self, frame: np.ndarray, rois: List[Dict] = None) -> Dict[str, Any]:
         """
@@ -174,8 +272,8 @@ class SequentialDualYOLO:
                 }
                 combined['roi_stats'][roi_name]['accident'] = 0
         
-        # Process accident detections
-        accident_boxes = []
+        # Process raw accident detections
+        raw_accent_detections = []
         for result in results_accidents:
             for box in result.boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
@@ -185,23 +283,27 @@ class SequentialDualYOLO:
                     'bbox': [x1, y1, x2, y2],
                     'confidence': conf,
                     'center': ((x1 + x2) // 2, (y1 + y2) // 2),
-                    'involved_objects': []
+                    'involved_objects': [] # Will be populated if confirmed
                 }
-                
-                accident_boxes.append(accident_data)
-                
-                # Check ROI membership
-                if rois:
-                    for roi in rois:
-                        inside = cv2.pointPolygonTest(
-                            roi['points'],
-                            accident_data['center'],
-                            False
-                        )
-                        if inside >= 0:
-                            accident_data['roi'] = roi['name']
-                            combined['roi_stats'][roi['name']]['accident'] += 1
-                            break
+                raw_accent_detections.append(accident_data)
+        
+        # FILTER: Apply Temporal Consistency Check
+        confirmed_accidents = self.tracker.update(raw_accent_detections)
+        
+        # Process confirmed accidents for ROI and stats
+        for accident_data in confirmed_accidents:
+            # Check ROI membership
+            if rois:
+                for roi in rois:
+                    inside = cv2.pointPolygonTest(
+                        roi['points'],
+                        accident_data['center'],
+                        False
+                    )
+                    if inside >= 0:
+                        accident_data['roi'] = roi['name']
+                        combined['roi_stats'][roi['name']]['accident'] += 1
+                        break
         
         # Process object detections
         object_boxes = []
@@ -238,8 +340,8 @@ class SequentialDualYOLO:
                 
                 object_boxes.append(object_data)
         
-        # Correlate accidents with nearby objects
-        for accident in accident_boxes:
+        # Correlate confirmed accidents with nearby objects
+        for accident in confirmed_accidents:
             for obj in object_boxes:
                 distance = self._calculate_distance(
                     accident['center'],
@@ -257,7 +359,7 @@ class SequentialDualYOLO:
                         'distance_to_accident': distance
                     })
         
-        combined['accidents'] = accident_boxes
+        combined['accidents'] = confirmed_accidents
         combined['objects'] = object_boxes
         
         return combined
