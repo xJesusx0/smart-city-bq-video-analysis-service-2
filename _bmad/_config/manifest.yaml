@@ -1,0 +1,24 @@
+installation:
+  version: 6.0.3
+  installDate: 2026-02-26T02:03:47.243Z
+  lastUpdated: 2026-02-26T02:03:47.243Z
+modules:
+  - name: core
+    version: 6.0.3
+    installDate: 2026-02-26T02:03:47.243Z
+    lastUpdated: 2026-02-26T02:03:47.243Z
+    source: built-in
+    npmPackage: null
+    repoUrl: null
+  - name: bmm
+    version: 6.0.3
+    installDate: 2026-02-26T02:03:47.212Z
+    lastUpdated: 2026-02-26T02:03:47.243Z
+    source: built-in
+    npmPackage: null
+    repoUrl: null
+ides:
+  - cursor
+  - antigravity
+  - gemini
+  - opencode
