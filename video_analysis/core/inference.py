@@ -14,6 +14,7 @@ import numpy as np
 from ultralytics import YOLO
 from typing import Dict, List, Tuple, Any
 import time
+import threading
 import logging
 from ..config import config
 
@@ -157,11 +158,21 @@ class SequentialDualYOLO:
         self.object_confidence = object_confidence or config.inference.get("object_confidence", 0.4)
         self.correlation_distance = correlation_distance or config.inference.get("correlation_distance", 100.0)
         
+        # Accident detection toggle
+        self.accident_detection_enabled = config.inference.get("accident_detection_enabled", True)
+        
+        # Async accident inference: run in background thread
+        self._cached_accident_results = []
+        self._accident_lock = threading.Lock()
+        self._accident_running = False
+        self.accident_every_n_frames = config.inference.get("accident_every_n_frames", 5)
+        self._frame_counter = 0
+        
         # Initialize Accident Tracker
         temporal_threshold = config.inference.get("temporal_threshold", 3)
         self.tracker = AccidentTracker(persistence_threshold=temporal_threshold)
         
-        logger.info(f"Initialized SequentialDualYOLO with conf_acc={self.accident_confidence}, conf_obj={self.object_confidence}, temporal_threshold={temporal_threshold}")
+        logger.info(f"Initialized SequentialDualYOLO (async accidents) with conf_acc={self.accident_confidence}, conf_obj={self.object_confidence}, accident_every_n={self.accident_every_n_frames}")
         
     def process_frame(self, frame: np.ndarray, rois: List[Dict] = None) -> Dict[str, Any]:
         """
@@ -180,20 +191,24 @@ class SequentialDualYOLO:
                 - fps_info: Processing time information
         """
         start_time = time.time()
+        self._frame_counter += 1
         
         # Preprocess frame (shared preprocessing)
         preprocessed = self._preprocess_frame(frame)
         preprocess_time = time.time()
         
-        # Step 1: Detect accidents
-        results_accidents = self.model_accidents(
-            preprocessed,
-            verbose=False,
-            conf=self.accident_confidence
-        )
+        # Step 1: Dispatch accident detection asynchronously (non-blocking)
+        if self.accident_detection_enabled:
+            should_run_accidents = (self._frame_counter % self.accident_every_n_frames == 0)
+            if should_run_accidents and not self._accident_running:
+                self._dispatch_accident_inference(preprocessed.copy())
+        
+        # Read cached accident results (thread-safe)
+        with self._accident_lock:
+            results_accidents = self._cached_accident_results
         accidents_time = time.time()
         
-        # Step 2: Detect objects
+        # Step 2: Detect objects (runs every frame, synchronous — it's fast with nano)
         results_coco = self.model_coco(
             preprocessed,
             verbose=False,
@@ -236,6 +251,36 @@ class SequentialDualYOLO:
         # YOLO models handle preprocessing internally, but we can do
         # any custom preprocessing here if needed
         return frame
+    
+    def _dispatch_accident_inference(self, frame: np.ndarray):
+        """
+        Launch accident model inference in a background thread.
+        The main loop continues without waiting for the result.
+        """
+        self._accident_running = True
+        thread = threading.Thread(
+            target=self._accident_worker,
+            args=(frame,),
+            daemon=True
+        )
+        thread.start()
+    
+    def _accident_worker(self, frame: np.ndarray):
+        """
+        Background worker that runs the accident model and updates cached results.
+        """
+        try:
+            results = self.model_accidents(
+                frame,
+                verbose=False,
+                conf=self.accident_confidence
+            )
+            with self._accident_lock:
+                self._cached_accident_results = results
+        except Exception as e:
+            logger.error(f"Async accident inference error: {e}")
+        finally:
+            self._accident_running = False
     
     def _combine_results(
         self,
