@@ -7,7 +7,7 @@ inference:
   object_confidence: 0.4
   correlation_distance: 50.0
   temporal_threshold: 1 # Number of consecutive frames to confirm accident
-  accident_detection_enabled: True # Set to false to completely disable accident model
+  accident_detection_enabled: False # Set to false to completely disable accident model
   accident_every_n_frames: 10 # Run accident model every N processed frames (async, non-blocking)
 
 video:
